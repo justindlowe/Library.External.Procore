@@ -1,0 +1,66 @@
+trigger:
+- master
+
+pool:
+  name: default
+
+variables:
+  projectPath: 'Library.External.Procore/Library.External.Procore.csproj'
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  buildOutputPath: '$(Build.ArtifactStagingDirectory)'
+  packageOutputPath: '$(Build.ArtifactStagingDirectory)\nupkg' # Define package output directory
+
+steps:
+- task: NuGetToolInstaller@1
+
+- task: NuGetCommand@2
+  inputs:
+    restoreSolution: '$(solution)'
+
+- task: MSBuild@1
+  inputs:
+    solution: '$(projectPath)'
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
+    msbuildArchitecture: 'x64'
+    msbuildArguments: '/p:OutputPath=$(buildOutputPath)'
+
+# Add the dotnet pack step here to package the project into a .nupkg file
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'pack'
+    packagesToPack: '$(projectPath)'
+    configuration: '$(buildConfiguration)'
+    outputDir: '$(packageOutputPath)'
+    arguments: '--no-build' # Skip the build during pack if the project was already built
+
+# Copy specified files from the build_output directory to the Artifact Staging Directory
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(buildOutputPath)'
+    Contents: |
+      Library.External.Procore.deps.json
+      Library.External.Procore.dll
+      Library.External.Procore.pdb
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+# Publish the build outputs as artifacts
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathToPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'Library.External.Procore-Release'
+    publishLocation: 'Container'
+
+# Now, update the path to the .nupkg files to be pushed
+#- task: NuGetCommand@2
+#  inputs:
+#    command: 'push'
+#    packagesToPush: '$(packageOutputPath)/*.nupkg' # Updated path to the .nupkg files
+#    nuGetFeedType: 'internal'
+#    publishVstsFeed: 'BeckDevOps-Packages'
+
+- powershell: |
+    Get-ChildItem -Path $(packageOutputPath) -Recurse
+  displayName: 'List the contents of the package output directory'
